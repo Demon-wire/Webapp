@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produktivitäts-App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    
+    <!-- Login Screen -->
+    <div id="login-screen" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md">
+            <h1 id="login-title" class="text-3xl font-bold text-center mb-6">Willkommen</h1>
+            <div id="error-msg" class="hidden bg-red-100 text-red-700 p-3 rounded mb-4"></div>
+            <input type="email" id="email" placeholder="E-Mail" class="w-full px-4 py-3 border rounded-lg mb-3 focus:ring-2 focus:ring-blue-500">
+            <input type="password" id="password" placeholder="Passwort" class="w-full px-4 py-3 border rounded-lg mb-4 focus:ring-2 focus:ring-blue-500">
+            <button id="auth-btn" onclick="handleAuth()" class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 mb-3">Anmelden</button>
+            <button onclick="toggleAuth()" class="w-full text-blue-500 text-sm">Registrieren</button>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="hidden p-4 max-w-6xl mx-auto">
+        <header class="bg-white rounded-xl shadow-lg p-6 mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold">Produktivitäts-App</h1>
+                <p class="text-gray-600" id="user-info"></p>
+            </div>
+            <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg">Abmelden</button>
+        </header>
+
+        <div class="bg-white rounded-xl shadow-lg mb-6 p-2 flex gap-2">
+            <button onclick="showTab('tasks')" id="tab-tasks" class="flex-1 py-3 rounded-lg bg-blue-500 text-white">Aufgaben</button>
+            <button onclick="showTab('notes')" id="tab-notes" class="flex-1 py-3 rounded-lg bg-gray-100">Notizen</button>
+            <button onclick="showTab('stats')" id="tab-stats" class="flex-1 py-3 rounded-lg bg-gray-100">Statistiken</button>
+        </div>
+
+        <!-- Tasks -->
+        <div id="tasks-tab" class="bg-white rounded-xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold mb-4">Aufgaben</h2>
+            <div class="flex gap-2 mb-6">
+                <input type="text" id="task-input" placeholder="Neue Aufgabe..." class="flex-1 px-4 py-3 border rounded-lg">
+                <button onclick="addTask()" class="bg-blue-500 text-white px-6 py-3 rounded-lg">Hinzufügen</button>
+            </div>
+            <div id="task-list"></div>
+        </div>
+
+        <!-- Notes -->
+        <div id="notes-tab" class="bg-white rounded-xl shadow-lg p-6 hidden">
+            <h2 class="text-2xl font-bold mb-4">Notizen</h2>
+            <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                <input type="text" id="note-title" placeholder="Titel..." class="w-full px-4 py-2 border rounded-lg mb-2">
+                <textarea id="note-content" placeholder="Inhalt..." rows="4" class="w-full px-4 py-2 border rounded-lg mb-2"></textarea>
+                <button onclick="addNote()" class="bg-blue-500 text-white px-6 py-2 rounded-lg">Speichern</button>
+            </div>
+            <div id="note-list" class="grid md:grid-cols-2 gap-4"></div>
+        </div>
+
+        <!-- Stats -->
+        <div id="stats-tab" class="bg-white rounded-xl shadow-lg p-6 hidden">
+            <h2 class="text-2xl font-bold mb-6">Statistiken</h2>
+            <div class="grid md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-gradient-to-br from-green-400 to-green-600 text-white p-6 rounded-xl">
+                    <p class="text-sm">Heute</p>
+                    <p class="text-4xl font-bold" id="stat-today">0</p>
+                </div>
+                <div class="bg-gradient-to-br from-blue-400 to-blue-600 text-white p-6 rounded-xl">
+                    <p class="text-sm">7 Tage</p>
+                    <p class="text-4xl font-bold" id="stat-week">0</p>
+                </div>
+                <div class="bg-gradient-to-br from-purple-400 to-purple-600 text-white p-6 rounded-xl">
+                    <p class="text-sm">30 Tage</p>
+                    <p class="text-4xl font-bold" id="stat-month">0</p>
+                </div>
+                <div class="bg-gradient-to-br from-orange-400 to-orange-600 text-white p-6 rounded-xl">
+                    <p class="text-sm">Gesamt</p>
+                    <p class="text-4xl font-bold" id="stat-total">0</p>
+                </div>
+            </div>
+            <div id="chart"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const app = initializeApp({
+            apiKey: "AIzaSyBYrTKIkpMlHjTxQ4IXtuKN7B3Vi0ap0yM",
+            authDomain: "webapp-fdb19.firebaseapp.com",
+            projectId: "webapp-fdb19",
+            storageBucket: "webapp-fdb19.firebasestorage.app",
+            messagingSenderId: "463452887951",
+            appId: "1:463452887951:web:6354041d441febf543c9fa"
+        });
+
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        let user = null;
+        let isReg = false;
+        let tasks = [];
+        let notes = [];
+        let history = [];
+
+        onAuthStateChanged(auth, async (u) => {
+            if (u) {
+                user = u;
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                document.getElementById('user-info').textContent = `Angemeldet: ${u.email}`;
+                await loadData(u.uid);
+            } else {
+                user = null;
+                document.getElementById('login-screen').classList.remove('hidden');
+                document.getElementById('app').classList.add('hidden');
+            }
+        });
+
+        window.toggleAuth = () => {
+            isReg = !isReg;
+            document.getElementById('login-title').textContent = isReg ? 'Registrierung' : 'Willkommen';
+            document.getElementById('auth-btn').textContent = isReg ? 'Registrieren' : 'Anmelden';
+        };
+
+        window.handleAuth = async () => {
+            const email = document.getElementById('email').value;
+            const pwd = document.getElementById('password').value;
+            try {
+                if (isReg) await createUserWithEmailAndPassword(auth, email, pwd);
+                else await signInWithEmailAndPassword(auth, email, pwd);
+            } catch (e) {
+                document.getElementById('error-msg').textContent = e.message;
+                document.getElementById('error-msg').classList.remove('hidden');
+            }
+        };
+
+        window.logout = () => signOut(auth);
+
+        async function loadData(uid) {
+            const d = await getDoc(doc(db, 'users', uid));
+            if (d.exists()) {
+                const data = d.data();
+                tasks = data.tasks || [];
+                notes = data.notes || [];
+                history = data.history || [];
+                render();
+            }
+        }
+
+        async function save() {
+            if (!user) return;
+            await setDoc(doc(db, 'users', user.uid), {
+                tasks, notes, history, updated: new Date().toISOString()
+            });
+        }
+
+        window.addTask = async () => {
+            const txt = document.getElementById('task-input').value.trim();
+            if (txt) {
+                tasks.push({ id: Date.now(), text: txt, done: false, created: new Date().toISOString() });
+                await save();
+                document.getElementById('task-input').value = '';
+                renderTasks();
+            }
+        };
+
+        window.toggleTask = async (id) => {
+            const t = tasks.find(x => x.id === id);
+            t.done = !t.done;
+            if (t.done) history.push({ id, text: t.text, date: new Date().toISOString() });
+            else history = history.filter(h => h.id !== id);
+            await save();
+            renderTasks();
+        };
+
+        window.delTask = async (id) => {
+            tasks = tasks.filter(t => t.id !== id);
+            history = history.filter(h => h.id !== id);
+            await save();
+            renderTasks();
+        };
+
+        window.addNote = async () => {
+            const title = document.getElementById('note-title').value.trim();
+            const content = document.getElementById('note-content').value.trim();
+            if (title || content) {
+                notes.push({ id: Date.now(), title: title || 'Notiz', content, created: new Date().toISOString() });
+                await save();
+                document.getElementById('note-title').value = '';
+                document.getElementById('note-content').value = '';
+                renderNotes();
+            }
+        };
+
+        window.delNote = async (id) => {
+            notes = notes.filter(n => n.id !== id);
+            await save();
+            renderNotes();
+        };
+
+        function renderTasks() {
+            const list = document.getElementById('task-list');
+            if (!tasks.length) {
+                list.innerHTML = '<p class="text-gray-400 text-center py-8">Keine Aufgaben</p>';
+                return;
+            }
+            list.innerHTML = tasks.map(t => `
+                <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-lg mb-2">
+                    <button onclick="toggleTask(${t.id})">
+                        ${t.done ? '✅' : '⭕'}
+                    </button>
+                    <span class="flex-1 ${t.done ? 'line-through text-gray-400' : ''}">${t.text}</span>
+                    <button onclick="delTask(${t.id})" class="text-red-500">🗑️</button>
+                </div>
+            `).join('');
+        }
+
+        function renderNotes() {
+            const list = document.getElementById('note-list');
+            if (!notes.length) {
+                list.innerHTML = '<p class="text-gray-400 text-center py-8">Keine Notizen</p>';
+                return;
+            }
+            list.innerHTML = notes.map(n => `
+                <div class="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-lg">
+                    <div class="flex justify-between mb-2">
+                        <h3 class="font-bold">${n.title}</h3>
+                        <button onclick="delNote(${n.id})" class="text-red-500">🗑️</button>
+                    </div>
+                    <p class="text-gray-700 mb-2">${n.content}</p>
+                    <p class="text-xs text-gray-500">${new Date(n.created).toLocaleString('de-DE')}</p>
+                </div>
+            `).join('');
+        }
+
+        function renderStats() {
+            const now = new Date();
+            const today = new Date(now.setHours(0,0,0,0));
+            const week = new Date(today); week.setDate(week.getDate() - 7);
+            const month = new Date(today); month.setDate(month.getDate() - 30);
+
+            const td = history.filter(h => new Date(h.date) >= today).length;
+            const wk = history.filter(h => new Date(h.date) >= week).length;
+            const mt = history.filter(h => new Date(h.date) >= month).length;
+
+            document.getElementById('stat-today').textContent = td;
+            document.getElementById('stat-week').textContent = wk;
+            document.getElementById('stat-month').textContent = mt;
+            document.getElementById('stat-total').textContent = history.length;
+
+            const daily = {};
+            history.forEach(h => {
+                const d = new Date(h.date).toLocaleDateString('de-DE');
+                daily[d] = (daily[d] || 0) + 1;
+            });
+
+            const dates = Object.keys(daily).sort((a,b) => 
+                new Date(a.split('.').reverse().join('-')) - new Date(b.split('.').reverse().join('-'))
+            ).slice(-14);
+
+            const chart = document.getElementById('chart');
+            if (dates.length) {
+                const max = Math.max(...Object.values(daily));
+                chart.innerHTML = '<h3 class="font-bold mb-4">Letzte 14 Tage</h3>' + dates.map(d => `
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="text-sm w-24">${d}</span>
+                        <div class="flex-1 bg-gray-200 rounded-full h-8">
+                            <div class="bg-blue-500 h-8 rounded-full flex items-center justify-end pr-3 text-white text-sm" 
+                                 style="width: ${(daily[d]/max)*100}%">
+                                ${daily[d]}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                chart.innerHTML = '<p class="text-gray-400 text-center py-8">Keine Daten</p>';
+            }
+        }
+
+        function render() {
+            renderTasks();
+            renderNotes();
+        }
+
+        window.showTab = (tab) => {
+            ['tasks', 'notes', 'stats'].forEach(t => {
+                document.getElementById(`${t}-tab`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).className = 'flex-1 py-3 rounded-lg bg-gray-100';
+            });
+            document.getElementById(`${tab}-tab`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).className = 'flex-1 py-3 rounded-lg bg-blue-500 text-white';
+            if (tab === 'stats') renderStats();
+        };
+
+        document.getElementById('task-input').addEventListener('keypress', e => {
+            if (e.key === 'Enter') addTask();
+        });
+    </script>
+</body>
+</html>
